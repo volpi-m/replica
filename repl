@@ -75,6 +75,8 @@ class Repl():
             except KeyboardInterrupt:
                 #subprocess.run(["rm", self.code_fname, self.exec_name])
                 break
+            if line == "quit" or line == "exit":
+                break
             self.analyseInput(line)
             self.writeInFile()
             if self.compile():
@@ -182,6 +184,9 @@ def main(av):
             jsonObj = json.loads(file.read())
     except FileNotFoundError:
         print(f"The environement file {path} was not found", file=stderr)
+        exit(1)
+    except NotADirectoryError:
+        print(f"The environement file {path} was not found.\nPlease specify the directory where your configuration file is", file=stderr)
         exit(1)
     #print(jsonObj, type(jsonObj))
 
