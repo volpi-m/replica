@@ -1,0 +1,18 @@
+{
+    "exec_name": "a.out",
+    "run": "{exec_name}",
+    "compile_line": "{compiler} {options} -o {exec_name} {code_fname}",
+    "language": {
+        "compiler": "gdc",
+        "options": "-W -O3",
+        "multiple_lines": ["while", "if", "for", "else", "switch", "do"]
+    },
+    "code_template": {
+        "includes": ["import std.stdio;", "import std.algorithm;", "import std.range;"],
+        "before_code": "int main() {\n",
+        "after_code": "return (0);\n}",
+        "include_delim": "import",
+        "multi_line_delim": "$",
+        "end_of_line": ";"
+    }
+}

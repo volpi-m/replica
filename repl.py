@@ -1,0 +1,193 @@
+#!./venv/bin/python3
+
+import argparse
+import difflib
+import subprocess
+import json
+import os
+from sys import argv, stderr
+
+from prompt_toolkit.shortcuts import prompt
+from prompt_toolkit.lexers import PygmentsLexer
+from prompt_toolkit.styles.pygments import style_from_pygments_cls
+from pygments.lexers.c_cpp import CppLexer 
+from pygments.styles import get_style_by_name
+
+
+NONE = -1
+INSTRUCTION = 0
+FUNCTION = 1
+
+
+class ReplFunction():
+
+    def __init__(self, line1):
+        self.lines: list[str] = [line1]
+
+    def __str__(self) -> str:
+        return "\n".join(self.lines)
+
+    def addLine(self, line: str):
+        self.lines.append(line)
+
+
+class Repl():
+
+    def __init__(self, jsonObj: dict, env: str):
+        self.jsonObj = jsonObj
+        self.env = env
+        self.code_fname = "main." + self.env
+        self.old_output = ""
+        self.new_output = ""
+        self.added_code = NONE
+        self.includes: list[str] = []
+        self.functions: list[ReplFunction] = []
+        self.instructions: list[str] = []
+        self.loadJson()
+
+    def loadJson(self):
+        try:
+            self.exec_name: str = self.jsonObj["exec_name"]
+            self.run: str = self.jsonObj["run"]
+            self.compile_line: str = self.jsonObj["compile_line"]
+
+            self.compiler: str = self.jsonObj["language"]["compiler"]
+            self.options: str = self.jsonObj["language"]["options"]
+            self.keywords: str = self.jsonObj["language"]["multiple_lines"]
+
+            self.includes: list[str] = self.jsonObj["code_template"]["includes"]
+            self.before_code: str = self.jsonObj["code_template"]["before_code"]
+            self.after_code: str = self.jsonObj["code_template"]["after_code"]
+            self.include_delim: str = self.jsonObj["code_template"]["include_delim"]
+            self.multi_line_delim: str = self.jsonObj["code_template"]["multi_line_delim"]
+            self.end_of_line: str = self.jsonObj["code_template"]["end_of_line"]
+        except KeyError as ex:
+            print(f"Bad config on line: {ex.args[0]}")
+
+    def loop(self):
+        style = style_from_pygments_cls(get_style_by_name("monokai"))
+        while True:
+            try:
+                line = prompt("> ", lexer=PygmentsLexer(CppLexer), style=style)
+            except EOFError:
+                #subprocess.run(["rm", self.code_fname, self.exec_name])
+                break
+            except KeyboardInterrupt:
+                #subprocess.run(["rm", self.code_fname, self.exec_name])
+                break
+            self.analyseInput(line)
+            self.writeInFile()
+            if self.compile():
+                self.execute()
+                self.diff()
+
+    def analyseInput(self, line: str):
+        if line.startswith(self.include_delim):
+            self.includes.append(line)
+        elif line.startswith(self.multi_line_delim):
+            self.added_code = FUNCTION
+            self.addFunction(line)
+        else:
+            self.added_code = INSTRUCTION
+            self.instructions.append(line + self.end_of_line + "\n")
+
+    def addFunction(self, line: str):
+        function = ReplFunction(line[1:])
+        style = style_from_pygments_cls(get_style_by_name("monokai"))
+        while not line.endswith(self.multi_line_delim):
+            try:
+                line = prompt("> ", lexer=PygmentsLexer(CppLexer), style=style)
+            except KeyboardInterrupt:
+                return
+            except EOFError:
+                return
+            if line.endswith(self.multi_line_delim):
+                function.addLine(line[:-1])
+            else:
+                function.addLine(line + self.end_of_line)
+        self.functions.append(function)
+
+    def writeInFile(self):
+        with open(self.code_fname, 'w') as file:
+            for inc in self.includes:
+                file.write(inc + "\n")
+            file.write("\n")
+            for func in self.functions:
+                file.write(str(func))
+                file.write("\n")
+            file.write("\n" + self.before_code)
+            for instr in self.instructions:
+                file.write(instr)
+            file.write(self.after_code)
+
+    def compile(self) -> bool:
+        command_line = self.compile_line.format(
+            compiler=self.compiler,
+            options=self.options,
+            exec_name=self.exec_name,
+            code_fname=self.code_fname
+        )
+        ret = subprocess.run(command_line.split(" "), capture_output=True, text=True)
+        #print(ret)
+        if ret.stderr != "":
+            # check if error before deleting
+            if self.added_code == INSTRUCTION:
+                self.instructions.pop()
+            elif self.added_code == FUNCTION:
+                self.functions.pop()
+            else:
+                pass
+            print("\n".join(ret.stderr.split('\n')[:10]))
+            return False
+        return True
+
+    def execute(self):
+        exec_line = "./" + self.run.format(exec_name=self.exec_name)
+        ret = subprocess.run([exec_line], capture_output=True, text=True)
+        if ret.stdout is not None:
+            self.new_output = ret.stdout
+        else:
+            self.new_output = ""
+
+    def diff(self):
+        #print("old: " + self.old_output)
+        #print("new: " + self.new_output)
+        repl_output = ""
+        for line in difflib.context_diff(self.old_output, self.new_output, lineterm=''):
+            if line.startswith("+"):
+                repl_output += line[2]
+        if repl_output != "":
+            if repl_output.endswith("\n"):
+                print(repl_output, end='')
+            else:
+                print(repl_output)
+        self.old_output = self.new_output
+
+
+def main(av):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", nargs=1, required=True)
+    parser.add_argument("--config", nargs=1)
+    ns = parser.parse_args(av)
+    #print(ns)
+
+    jsonObj: dict
+    path: str
+    if ns.config is None:
+        path = ns.env[0] + ".json"
+    else:
+        path = os.path.join(ns.config[0], ns.env[0] + ".json")
+    try:
+        with open(path) as file:
+            jsonObj = json.loads(file.read())
+    except FileNotFoundError:
+        print(f"The environement file {path} was not found", file=stderr)
+        exit(1)
+    #print(jsonObj, type(jsonObj))
+
+    r = Repl(jsonObj, ns.env[0])
+    r.loop()
+
+
+if __name__ == "__main__":
+    main(argv[1:])

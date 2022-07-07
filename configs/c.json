@@ -1,0 +1,18 @@
+{
+    "exec_name": "a.out",
+    "run": "{exec_name}",
+    "compile_line": "{compiler} {options} -o {exec_name} {code_fname}",
+    "language": {
+        "compiler": "gcc",
+        "options": "-W -O3",
+        "multiple_lines": ["while", "if", "for", "else", "switch", "do"]
+    },
+    "code_template": {
+        "includes": ["#include <stdlib.h>", "#include <stdio.h>"],
+        "before_code": "int main(int ac, char **av) {\n",
+        "after_code": "return (0);\n}",
+        "include_delim": "#",
+        "multi_line_delim": "$",
+        "end_of_line": ";"
+    }
+}
