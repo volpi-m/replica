@@ -4,13 +4,7 @@ A configurable repl (read-eval-print-loop) capable of running multiple compiled 
 
 ## How to use ?
 
-```sh
-matteov> ./repl --env cxx --config configs/
-> std::cout << "hello world";
-hello world
-> exit
-matteov>
-```
+![replica_ex01](images/replica_ex1.png)
 
 ## A problem, an idea ?
 
