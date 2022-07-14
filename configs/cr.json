@@ -1,0 +1,18 @@
+{
+    "exec_name": "a.out",
+    "run": "{exec_name}",
+    "compile_line": "{compiler} {code_fname}",
+    "language": {
+        "compiler": "crystal build",
+        "options": " ",
+        "multiple_lines": ["while", "if", "for", "else", "switch", "do"]
+    },
+    "code_template": {
+        "includes": [],
+        "before_code": "def main()\n",
+        "after_code": "end\n\nmain()",
+        "include_delim": " ",
+        "multi_line_delim": "$",
+        "end_of_line": ";"
+    }
+}

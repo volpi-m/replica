@@ -145,7 +145,11 @@ class Repl():
 
     def execute(self):
         exec_line = "./" + self.run.format(exec_name=self.exec_name)
-        ret = subprocess.run([exec_line], capture_output=True, text=True)
+        try:
+            ret = subprocess.run([exec_line], capture_output=True, text=True)
+        except FileNotFoundError:
+            print(f"Executable file {exec_line} not found", file=stderr)
+            return
         if ret.stdout is not None:
             self.new_output = ret.stdout
         else:
